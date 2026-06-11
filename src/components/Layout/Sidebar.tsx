@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import {
-  LayoutDashboard,
   FolderKanban,
   ClipboardList,
   Calendar,
@@ -10,13 +9,15 @@ import {
   ChevronLeft,
   ChevronRight,
   Plane,
+  AlertCircle,
 } from 'lucide-react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useParams } from 'react-router-dom';
+import { useProjectStore } from '@/store/projectStore';
 
 interface NavItem {
   id: string;
   label: string;
-  icon: typeof LayoutDashboard;
+  icon: typeof FolderKanban;
   path: string;
 }
 
@@ -32,10 +33,34 @@ const navItems: NavItem[] = [
 export default function Sidebar() {
   const [collapsed, setCollapsed] = useState(false);
   const location = useLocation();
+  const params = useParams<{ id: string }>();
+  const { getProjectById } = useProjectStore();
+  
+  const currentProjectId = params.id || localStorage.getItem('currentProjectId') || '';
+  const currentProject = currentProjectId ? getProjectById(currentProjectId) : null;
 
   const isActive = (path: string) => {
     if (path === '/') return location.pathname === '/';
     return location.pathname.startsWith(path.replace(':id', ''));
+  };
+
+  const getNavPath = (path: string) => {
+    if (path === '/') return '/';
+    if (currentProjectId) {
+      return path.replace(':id', currentProjectId);
+    }
+    return '/';
+  };
+
+  const handleNavClick = (path: string) => {
+    if (path !== '/' && !currentProjectId) {
+      alert('请先选择一个项目');
+      return false;
+    }
+    if (currentProjectId) {
+      localStorage.setItem('currentProjectId', currentProjectId);
+    }
+    return true;
   };
 
   return (
@@ -55,12 +80,23 @@ export default function Sidebar() {
           {collapsed && <Plane className="w-8 h-8 text-accent-400" />}
         </div>
 
+        {currentProject && !collapsed && (
+          <div className="px-4 py-3 bg-primary-700 border-b border-primary-500">
+            <div className="flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 text-accent-400" />
+              <span className="text-xs text-gray-300">当前项目</span>
+            </div>
+            <p className="text-sm font-medium mt-1 truncate">{currentProject.name}</p>
+          </div>
+        )}
+
         <nav className="flex-1 py-4">
           <ul className="space-y-2 px-2">
             {navItems.map((item) => (
               <li key={item.id}>
                 <Link
-                  to={item.path === '/projects/:id/requirements' ? '/' : item.path}
+                  to={getNavPath(item.path)}
+                  onClick={() => handleNavClick(item.path)}
                   className={`flex items-center gap-3 px-3 py-3 rounded-lg transition-all duration-200 ${
                     isActive(item.path)
                       ? 'bg-accent-500 text-white'

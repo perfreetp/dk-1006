@@ -42,14 +42,31 @@ export interface Risk {
   mitigation: string;
 }
 
+export interface FieldFile {
+  name: string;
+  uploadTime?: string;
+  size?: number;
+  type?: string;
+}
+
 export interface FieldReport {
   id: string;
   projectId: string;
   date: string;
   flightRecords: string;
-  photos: string[];
-  trajectory: string;
+  photos: FieldFile[] | string[];
+  trajectory: FieldFile | string;
   issues: string;
+}
+
+export interface RetakeTask {
+  id: string;
+  projectId: string;
+  deliverableId: string;
+  description: string;
+  status: 'pending' | 'in_progress' | 'completed';
+  createdAt: string;
+  targetDate: string;
 }
 
 export interface Deliverable {

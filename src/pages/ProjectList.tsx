@@ -45,7 +45,10 @@ export default function ProjectList() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (editingProject) {
-      updateProject(editingProject.id, formData);
+      updateProject(editingProject.id, {
+        ...formData,
+        budget: parseFloat(formData.budget) || 0,
+      });
     } else {
       addProject({
         ...formData,
@@ -96,6 +99,11 @@ export default function ProjectList() {
     setIsModalOpen(true);
   };
 
+  const handleProjectClick = (projectId: string) => {
+    localStorage.setItem('currentProjectId', projectId);
+    navigate(`/projects/${projectId}/requirements`);
+  };
+
   return (
     <Layout title="项目列表" searchPlaceholder="搜索项目或客户..." onSearch={setSearchQuery}>
       <div className="flex items-center justify-between mb-6">
@@ -132,7 +140,7 @@ export default function ProjectList() {
           <div
             key={project.id}
             className="card hover:shadow-md transition-shadow cursor-pointer group"
-            onClick={() => navigate(`/projects/${project.id}/requirements`)}
+            onClick={() => handleProjectClick(project.id)}
           >
             <div className="flex items-start justify-between mb-4">
               <h3 className="text-lg font-semibold text-gray-800 group-hover:text-primary-600 transition-colors">

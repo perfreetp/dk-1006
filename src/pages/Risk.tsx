@@ -5,7 +5,7 @@ import Modal from '@/components/UI/Modal';
 import Button from '@/components/UI/Button';
 import Badge from '@/components/UI/Badge';
 import { useProjectStore } from '@/store/projectStore';
-import { Risk, RiskType, RiskLevel } from '@/types';
+import type { Risk, RiskType, RiskLevel } from '@/types';
 import { useParams, Link } from 'react-router-dom';
 
 const typeConfig: Record<RiskType, { label: string; icon: typeof AlertTriangle; color: string }> = {
@@ -18,11 +18,6 @@ const levelConfig: Record<RiskLevel, { label: string; variant: 'default' | 'succ
   high: { label: '高', variant: 'danger' },
   medium: { label: '中', variant: 'warning' },
   low: { label: '低', variant: 'default' },
-};
-
-const statusConfig = {
-  active: { label: '待处理', variant: 'danger' as const },
-  resolved: { label: '已解决', variant: 'success' as const },
 };
 
 export default function Risk() {
