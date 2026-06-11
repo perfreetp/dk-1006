@@ -5,6 +5,7 @@ import Planning from '@/pages/Planning';
 import Risk from '@/pages/Risk';
 import Field from '@/pages/Field';
 import Delivery from '@/pages/Delivery';
+import Review from '@/pages/Review';
 
 function App() {
   return (
@@ -16,6 +17,7 @@ function App() {
         <Route path="/projects/:id/risk" element={<Risk />} />
         <Route path="/projects/:id/field" element={<Field />} />
         <Route path="/projects/:id/delivery" element={<Delivery />} />
+        <Route path="/projects/:id/review" element={<Review />} />
       </Routes>
     </BrowserRouter>
   );

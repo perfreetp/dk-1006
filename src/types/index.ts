@@ -57,16 +57,21 @@ export interface FieldReport {
   photos: FieldFile[] | string[];
   trajectory: FieldFile | string;
   issues: string;
+  status: 'completed' | 'pending_review' | 'has_issues';
+  resolution?: string;
+  resolutionTime?: string;
 }
 
 export interface RetakeTask {
   id: string;
   projectId: string;
   deliverableId: string;
+  fieldReportId?: string;
   description: string;
   status: 'pending' | 'in_progress' | 'completed';
   createdAt: string;
   targetDate: string;
+  completedAt?: string;
 }
 
 export interface Deliverable {

@@ -43,6 +43,7 @@ export default function Delivery() {
     needsRetake: false,
     retakeDescription: '',
     retakeDate: '',
+    relatedReportId: '',
   });
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -66,6 +67,7 @@ export default function Delivery() {
         addRetakeTask({
           projectId: id,
           deliverableId: editingDeliverable?.id || currentDeliverableId,
+          fieldReportId: formData.relatedReportId || undefined,
           description: formData.retakeDescription,
           status: 'pending',
           targetDate: formData.retakeDate,
@@ -83,8 +85,31 @@ export default function Delivery() {
       needsRetake: false,
       retakeDescription: '',
       retakeDate: '',
+      relatedReportId: '',
     });
   };
+
+  const getDeliverableName = (deliverableId: string) => {
+    const deliverable = deliverables.find(d => d.id === deliverableId);
+    return deliverable?.name || '未知交付物';
+  };
+
+  const getFieldReportDate = (reportId?: string) => {
+    if (!reportId) return '-';
+    const report = fieldReports.find(r => r.id === reportId);
+    return report?.date || '-';
+  };
+
+  const checkDelayImpact = () => {
+    const pendingRetakes = retakeTasks.filter(t => t.status !== 'completed');
+    const hasDelay = pendingRetakes.some(t => {
+      if (!t.targetDate) return false;
+      return new Date(t.targetDate) > new Date(project?.deliveryDate || '');
+    });
+    return hasDelay;
+  };
+
+  const hasDelayImpact = checkDelayImpact();
 
   const handleEdit = (deliverable: Deliverable) => {
     setEditingDeliverable(deliverable);
@@ -106,6 +131,7 @@ export default function Delivery() {
       needsRetake,
       retakeDescription,
       retakeDate: '',
+      relatedReportId: '',
     });
     setIsModalOpen(true);
   };
@@ -128,6 +154,7 @@ export default function Delivery() {
       needsRetake: false,
       retakeDescription: '',
       retakeDate: '',
+      relatedReportId: '',
     });
     setIsModalOpen(true);
   };
@@ -325,47 +352,74 @@ export default function Delivery() {
 
       {retakeTasks.length > 0 && (
         <div className="card mb-6">
-          <div className="flex items-center gap-2 mb-4">
-            <RefreshCw className="w-5 h-5 text-orange-500" />
-            <h3 className="font-semibold text-gray-800">补拍任务安排</h3>
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <RefreshCw className="w-5 h-5 text-orange-500" />
+              <h3 className="font-semibold text-gray-800">补拍任务安排</h3>
+            </div>
+            {hasDelayImpact && (
+              <div className="flex items-center gap-2 px-3 py-1 bg-red-50 text-red-600 rounded-full text-sm">
+                <AlertTriangle className="w-4 h-4" />
+                <span>存在延期风险</span>
+              </div>
+            )}
           </div>
           <div className="space-y-3">
-            {retakeTasks.map((task) => (
-              <div
-                key={task.id}
-                className="flex items-center justify-between p-3 bg-orange-50 rounded-lg"
-              >
-                <div className="flex-1">
-                  <p className="text-sm font-medium text-gray-800">{task.description}</p>
-                  <p className="text-xs text-gray-500 mt-1">
-                    创建于 {task.createdAt} | 目标日期: {task.targetDate}
-                  </p>
-                </div>
-                <div className="flex items-center gap-3">
-                  <Badge variant={retakeStatusConfig[task.status].variant}>
-                    {retakeStatusConfig[task.status].label}
-                  </Badge>
-                  <div className="flex items-center gap-1">
-                    {task.status !== 'completed' && (
+            {retakeTasks.map((task) => {
+              const relatedDeliverable = getDeliverableName(task.deliverableId);
+              const relatedReportDate = getFieldReportDate(task.fieldReportId);
+              const isDelayed = task.status !== 'completed' && task.targetDate && 
+                new Date(task.targetDate) > new Date(project?.deliveryDate || '');
+              
+              return (
+                <div
+                  key={task.id}
+                  className={`flex items-center justify-between p-4 rounded-lg ${
+                    isDelayed ? 'bg-red-50 border border-red-200' : 'bg-orange-50'
+                  }`}
+                >
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-medium text-gray-800">{task.description}</p>
+                      {isDelayed && (
+                        <AlertTriangle className="w-4 h-4 text-red-500" />
+                      )}
+                    </div>
+                    <div className="flex flex-wrap gap-4 mt-2 text-xs text-gray-500">
+                      <span>关联交付物: {relatedDeliverable}</span>
+                      {task.fieldReportId && (
+                        <span>关联记录: {relatedReportDate}</span>
+                      )}
+                      <span>创建于: {task.createdAt}</span>
+                      <span>目标日期: {task.targetDate}</span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <Badge variant={retakeStatusConfig[task.status].variant}>
+                      {retakeStatusConfig[task.status].label}
+                    </Badge>
+                    <div className="flex items-center gap-1">
+                      {task.status !== 'completed' && (
+                        <button
+                          onClick={() => handleRetakeComplete(task.id)}
+                          className="p-2 hover:bg-green-100 rounded-lg transition-colors"
+                          title="标记完成"
+                        >
+                          <Check className="w-4 h-4 text-green-500" />
+                        </button>
+                      )}
                       <button
-                        onClick={() => handleRetakeComplete(task.id)}
-                        className="p-2 hover:bg-green-100 rounded-lg transition-colors"
-                        title="标记完成"
+                        onClick={() => handleRetakeDelete(task.id)}
+                        className="p-2 hover:bg-red-100 rounded-lg transition-colors"
+                        title="删除"
                       >
-                        <Check className="w-4 h-4 text-green-500" />
+                        <Trash2 className="w-4 h-4 text-red-500" />
                       </button>
-                    )}
-                    <button
-                      onClick={() => handleRetakeDelete(task.id)}
-                      className="p-2 hover:bg-red-100 rounded-lg transition-colors"
-                      title="删除"
-                    >
-                      <Trash2 className="w-4 h-4 text-red-500" />
-                    </button>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}
@@ -534,6 +588,21 @@ export default function Delivery() {
                   placeholder="请描述需要补拍的内容和要求"
                   required
                 />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">关联外业记录</label>
+                <select
+                  value={formData.relatedReportId}
+                  onChange={(e) => setFormData({ ...formData, relatedReportId: e.target.value })}
+                  className="form-select"
+                >
+                  <option value="">不关联</option>
+                  {fieldReports.map((report) => (
+                    <option key={report.id} value={report.id}>
+                      {report.date} - {report.flightRecords.substring(0, 30)}...
+                    </option>
+                  ))}
+                </select>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">补拍截止日期</label>

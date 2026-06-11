@@ -152,6 +152,7 @@ export const mockFieldReports: FieldReport[] = [
     photos: ['photo1.jpg', 'photo2.jpg', 'photo3.jpg'],
     trajectory: 'trajectory_20240615.gpx',
     issues: '部分区域云层较厚，影像质量略有影响',
+    status: 'has_issues',
   },
   {
     id: 'fr2',
@@ -161,6 +162,7 @@ export const mockFieldReports: FieldReport[] = [
     photos: ['photo4.jpg', 'photo5.jpg'],
     trajectory: 'trajectory_20240616.gpx',
     issues: '无异常情况，飞行顺利',
+    status: 'completed',
   },
 ];
 

@@ -10,6 +10,7 @@ import {
   ChevronRight,
   Plane,
   AlertCircle,
+  FileText,
 } from 'lucide-react';
 import { Link, useLocation, useParams } from 'react-router-dom';
 import { useProjectStore } from '@/store/projectStore';
@@ -28,6 +29,7 @@ const navItems: NavItem[] = [
   { id: 'risk', label: '风险登记', icon: AlertTriangle, path: '/projects/:id/risk' },
   { id: 'field', label: '外业执行', icon: Camera, path: '/projects/:id/field' },
   { id: 'delivery', label: '交付管理', icon: Package, path: '/projects/:id/delivery' },
+  { id: 'review', label: '项目复盘', icon: FileText, path: '/projects/:id/review' },
 ];
 
 export default function Sidebar() {
