@@ -11,6 +11,7 @@ import {
   Plane,
   AlertCircle,
   FileText,
+  Bell,
 } from 'lucide-react';
 import { Link, useLocation, useParams } from 'react-router-dom';
 import { useProjectStore } from '@/store/projectStore';
@@ -20,10 +21,12 @@ interface NavItem {
   label: string;
   icon: typeof FolderKanban;
   path: string;
+  isGlobal?: boolean;
 }
 
 const navItems: NavItem[] = [
   { id: 'projects', label: '项目列表', icon: FolderKanban, path: '/' },
+  { id: 'collaborations', label: '协作提醒', icon: Bell, path: '/collaborations', isGlobal: true },
   { id: 'requirements', label: '需求拆解', icon: ClipboardList, path: '/projects/:id/requirements' },
   { id: 'planning', label: '计划安排', icon: Calendar, path: '/projects/:id/planning' },
   { id: 'risk', label: '风险登记', icon: AlertTriangle, path: '/projects/:id/risk' },
@@ -36,26 +39,29 @@ export default function Sidebar() {
   const [collapsed, setCollapsed] = useState(false);
   const location = useLocation();
   const params = useParams<{ id: string }>();
-  const { getProjectById } = useProjectStore();
+  const { getProjectById, getAllCollaborationTasks } = useProjectStore();
   
   const currentProjectId = params.id || localStorage.getItem('currentProjectId') || '';
   const currentProject = currentProjectId ? getProjectById(currentProjectId) : null;
+  const taskCount = getAllCollaborationTasks().length;
 
   const isActive = (path: string) => {
     if (path === '/') return location.pathname === '/';
+    if (path === '/collaborations') return location.pathname === '/collaborations';
     return location.pathname.startsWith(path.replace(':id', ''));
   };
 
   const getNavPath = (path: string) => {
     if (path === '/') return '/';
+    if (path === '/collaborations') return '/collaborations';
     if (currentProjectId) {
       return path.replace(':id', currentProjectId);
     }
     return '/';
   };
 
-  const handleNavClick = (path: string) => {
-    if (path !== '/' && !currentProjectId) {
+  const handleNavClick = (item: NavItem) => {
+    if (!item.isGlobal && !currentProjectId && params.id) {
       alert('请先选择一个项目');
       return false;
     }
@@ -98,8 +104,8 @@ export default function Sidebar() {
               <li key={item.id}>
                 <Link
                   to={getNavPath(item.path)}
-                  onClick={() => handleNavClick(item.path)}
-                  className={`flex items-center gap-3 px-3 py-3 rounded-lg transition-all duration-200 ${
+                  onClick={() => handleNavClick(item)}
+                  className={`flex items-center gap-3 px-3 py-3 rounded-lg transition-all duration-200 relative ${
                     isActive(item.path)
                       ? 'bg-accent-500 text-white'
                       : 'hover:bg-primary-500 text-gray-200'
@@ -107,6 +113,11 @@ export default function Sidebar() {
                 >
                   <item.icon className="w-5 h-5 flex-shrink-0" />
                   {!collapsed && <span className="text-sm font-medium">{item.label}</span>}
+                  {!collapsed && item.id === 'collaborations' && taskCount > 0 && (
+                    <span className="absolute right-2 top-1 w-5 h-5 bg-red-500 rounded-full text-xs flex items-center justify-center">
+                      {taskCount > 9 ? '9+' : taskCount}
+                    </span>
+                  )}
                 </Link>
               </li>
             ))}

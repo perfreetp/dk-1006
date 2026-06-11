@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus, Edit2, Trash2, Package, CheckCircle, Clock, XCircle, Download, FileText, Calendar, Percent, AlertTriangle, RefreshCw, Check } from 'lucide-react';
+import { Plus, Edit2, Trash2, Package, CheckCircle, Clock, XCircle, Calendar, Percent, AlertTriangle, RefreshCw, Check, ChevronDown, ChevronUp, RotateCcw, Send } from 'lucide-react';
 import Layout from '@/components/Layout/Layout';
 import Modal from '@/components/UI/Modal';
 import Button from '@/components/UI/Button';
@@ -32,8 +32,10 @@ export default function Delivery() {
   const retakeTasks = getRetakeTasksByProjectId(id || '');
   
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
   const [editingDeliverable, setEditingDeliverable] = useState<Deliverable | null>(null);
-  const [currentDeliverableId, setCurrentDeliverableId] = useState('');
+  const [expandedDeliverableId, setExpandedDeliverableId] = useState<string | null>(null);
+  const [reviewAction, setReviewAction] = useState<'approve' | 'reject' | 'submit'>('submit');
   const [formData, setFormData] = useState({
     name: '',
     filePath: '',
@@ -49,24 +51,40 @@ export default function Delivery() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (id) {
+      const now = new Date().toISOString().split('T')[0];
+      
       if (editingDeliverable) {
+        const existingDeliverable = deliverables.find(d => d.id === editingDeliverable.id);
+        const newStatusHistory = existingDeliverable?.statusHistory || [];
+        newStatusHistory.push({ 
+          status: formData.status, 
+          date: now, 
+          comment: formData.reviewComments 
+        });
+        
         updateDeliverable(editingDeliverable.id, { 
           ...formData, 
           projectId: id,
-          reviewComments: formData.needsRetake ? `${formData.reviewComments}\n【需补拍】${formData.retakeDescription}` : formData.reviewComments,
+          statusHistory: newStatusHistory,
+          lastReviewDate: now,
+          reviewRound: (existingDeliverable?.reviewRound || 0) + (formData.status === 'pending' ? 1 : 0),
         });
       } else {
+        const newStatusHistory = [{ status: 'pending' as const, date: now, comment: '首次提交' }];
         addDeliverable({ 
           ...formData, 
           projectId: id,
-          reviewComments: formData.needsRetake ? `${formData.reviewComments}\n【需补拍】${formData.retakeDescription}` : formData.reviewComments,
+          statusHistory: newStatusHistory,
+          reviewRound: 1,
+          lastReviewDate: now,
         });
       }
       
       if (formData.needsRetake && formData.retakeDescription) {
+        const savedDeliverableId = editingDeliverable?.id || deliverables[deliverables.length - 1]?.id;
         addRetakeTask({
           projectId: id,
-          deliverableId: editingDeliverable?.id || currentDeliverableId,
+          deliverableId: savedDeliverableId || '',
           fieldReportId: formData.relatedReportId || undefined,
           description: formData.retakeDescription,
           status: 'pending',
@@ -89,31 +107,59 @@ export default function Delivery() {
     });
   };
 
-  const getDeliverableName = (deliverableId: string) => {
-    const deliverable = deliverables.find(d => d.id === deliverableId);
-    return deliverable?.name || '未知交付物';
+  const handleReviewAction = (deliverable: Deliverable, action: 'approve' | 'reject' | 'submit') => {
+    setEditingDeliverable(deliverable);
+    setReviewAction(action);
+    setIsReviewModalOpen(true);
   };
 
-  const getFieldReportDate = (reportId?: string) => {
-    if (!reportId) return '-';
-    const report = fieldReports.find(r => r.id === reportId);
-    return report?.date || '-';
-  };
+  const handleReviewSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (editingDeliverable && id) {
+      const now = new Date().toISOString().split('T')[0];
+      let newStatus: Deliverable['status'];
+      let comment = '';
+      
+      if (reviewAction === 'approve') {
+        newStatus = 'approved';
+        comment = '验收通过';
+      } else if (reviewAction === 'reject') {
+        newStatus = 'rejected';
+        comment = formData.reviewComments || '验收不通过，需修改';
+      } else {
+        newStatus = 'reviewing';
+        comment = '提交审核';
+      }
 
-  const checkDelayImpact = () => {
-    const pendingRetakes = retakeTasks.filter(t => t.status !== 'completed');
-    const hasDelay = pendingRetakes.some(t => {
-      if (!t.targetDate) return false;
-      return new Date(t.targetDate) > new Date(project?.deliveryDate || '');
+      const existingDeliverable = deliverables.find(d => d.id === editingDeliverable.id);
+      const newStatusHistory = existingDeliverable?.statusHistory || [];
+      newStatusHistory.push({ status: newStatus, date: now, comment });
+      
+      updateDeliverable(editingDeliverable.id, {
+        status: newStatus,
+        reviewComments: reviewAction === 'reject' ? formData.reviewComments : editingDeliverable.reviewComments,
+        statusHistory: newStatusHistory,
+        lastReviewDate: now,
+        reviewRound: newStatusHistory.length > 0 ? Math.ceil(newStatusHistory.length / 2) : 1,
+      });
+    }
+    setIsReviewModalOpen(false);
+    setEditingDeliverable(null);
+    setFormData({
+      name: '',
+      filePath: '',
+      version: 'v1.0',
+      status: 'pending',
+      reviewComments: '',
+      needsRetake: false,
+      retakeDescription: '',
+      retakeDate: '',
+      relatedReportId: '',
     });
-    return hasDelay;
   };
-
-  const hasDelayImpact = checkDelayImpact();
 
   const handleEdit = (deliverable: Deliverable) => {
     setEditingDeliverable(deliverable);
-    setCurrentDeliverableId(deliverable.id);
     const needsRetake = deliverable.reviewComments?.includes('【需补拍】') || false;
     let reviewComments = deliverable.reviewComments || '';
     let retakeDescription = '';
@@ -144,7 +190,6 @@ export default function Delivery() {
 
   const handleAdd = () => {
     setEditingDeliverable(null);
-    setCurrentDeliverableId('');
     setFormData({
       name: '',
       filePath: '',
@@ -160,7 +205,10 @@ export default function Delivery() {
   };
 
   const handleRetakeComplete = (taskId: string) => {
-    updateRetakeTask(taskId, { status: 'completed' });
+    updateRetakeTask(taskId, { 
+      status: 'completed',
+      completedAt: new Date().toISOString().split('T')[0],
+    });
   };
 
   const handleRetakeDelete = (taskId: string) => {
@@ -181,6 +229,28 @@ export default function Delivery() {
   const pendingRetakeCount = retakeTasks.filter(t => t.status === 'pending').length;
   const completedRetakeCount = retakeTasks.filter(t => t.status === 'completed').length;
   const retakeProgress = retakeTasks.length > 0 ? Math.round((completedRetakeCount / retakeTasks.length) * 100) : 0;
+
+  const getDeliverableName = (deliverableId: string) => {
+    const deliverable = deliverables.find(d => d.id === deliverableId);
+    return deliverable?.name || '未知交付物';
+  };
+
+  const getFieldReportDate = (reportId?: string) => {
+    if (!reportId) return '-';
+    const report = fieldReports.find(r => r.id === reportId);
+    return report?.date || '-';
+  };
+
+  const checkDelayImpact = () => {
+    const pendingRetakes = retakeTasks.filter(t => t.status !== 'completed');
+    const hasDelay = pendingRetakes.some(t => {
+      if (!t.targetDate) return false;
+      return new Date(t.targetDate) > new Date(project?.deliveryDate || '');
+    });
+    return hasDelay;
+  };
+
+  const hasDelayImpact = checkDelayImpact();
 
   return (
     <Layout title={`${project?.name || '项目'} - 交付管理`}>
@@ -436,62 +506,167 @@ export default function Delivery() {
           </Button>
         </div>
         
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-gray-200">
-                <th className="text-left py-3 px-4 font-semibold text-gray-600">文件名称</th>
-                <th className="text-left py-3 px-4 font-semibold text-gray-600">版本</th>
-                <th className="text-left py-3 px-4 font-semibold text-gray-600">状态</th>
-                <th className="text-left py-3 px-4 font-semibold text-gray-600">审核意见</th>
-                <th className="text-right py-3 px-4 font-semibold text-gray-600">操作</th>
-              </tr>
-            </thead>
-            <tbody>
-              {deliverables.map((deliverable) => (
-                <tr key={deliverable.id} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
-                  <td className="py-4 px-4">
-                    <div className="flex items-center gap-2">
-                      <FileText className="w-5 h-5 text-gray-400" />
-                      <span className="font-medium text-gray-800">{deliverable.name}</span>
-                      {deliverable.reviewComments?.includes('【需补拍】') && (
-                        <AlertTriangle className="w-4 h-4 text-orange-500" />
-                      )}
+        <div className="space-y-4">
+          {deliverables.map((deliverable) => {
+            const isExpanded = expandedDeliverableId === deliverable.id;
+            const maxRound = Math.max(...deliverables.map(d => d.reviewRound), 1);
+            const currentRound = deliverable.reviewRound;
+            
+            return (
+              <div key={deliverable.id} className="border border-gray-200 rounded-lg overflow-hidden">
+                <div
+                  className="p-4 bg-gray-50 cursor-pointer hover:bg-gray-100 transition-colors"
+                  onClick={() => setExpandedDeliverableId(isExpanded ? null : deliverable.id)}
+                >
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-3 mb-2">
+                        <span className="text-sm font-medium text-gray-800">{deliverable.name}</span>
+                        <Badge variant={statusConfig[deliverable.status].variant}>
+                          {statusConfig[deliverable.status].label}
+                        </Badge>
+                        <span className="text-xs text-gray-500">第{currentRound}轮</span>
+                        {deliverable.status === 'rejected' && (
+                          <RotateCcw className="w-4 h-4 text-orange-500" />
+                        )}
+                      </div>
+                      <p className="text-sm text-gray-600 line-clamp-2">{deliverable.reviewComments || '暂无审核意见'}</p>
                     </div>
-                  </td>
-                  <td className="py-4 px-4 text-sm text-gray-600">{deliverable.version}</td>
-                  <td className="py-4 px-4">
-                    <Badge variant={statusConfig[deliverable.status].variant}>
-                      {statusConfig[deliverable.status].label}
-                    </Badge>
-                  </td>
-                  <td className="py-4 px-4 text-sm text-gray-600 max-w-xs" title={deliverable.reviewComments}>
-                    <div className="truncate">{deliverable.reviewComments || '-'}</div>
-                  </td>
-                  <td className="py-4 px-4">
-                    <div className="flex items-center justify-end gap-2">
-                      <button className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
-                        <Download className="w-4 h-4 text-gray-500" />
+                    <div className="flex items-center gap-3">
+                      <div className="flex gap-1">
+                        {Array.from({ length: maxRound }).map((_, idx) => (
+                          <div
+                            key={idx}
+                            className={`w-2 h-2 rounded-full ${
+                              idx < currentRound
+                                ? idx < currentRound - 1
+                                  ? deliverable.status === 'approved' || deliverable.statusHistory[idx]?.status === 'approved'
+                                    ? 'bg-green-500'
+                                    : 'bg-red-500'
+                                  : deliverable.status === 'approved'
+                                  ? 'bg-green-500'
+                                  : deliverable.status === 'rejected'
+                                  ? 'bg-red-500'
+                                  : 'bg-blue-500'
+                                : 'bg-gray-300'
+                            }`}
+                            title={`第${idx + 1}轮`}
+                          />
+                        ))}
+                      </div>
+                      <button className="p-2 hover:bg-gray-200 rounded-lg transition-colors">
+                        {isExpanded ? (
+                          <ChevronUp className="w-5 h-5 text-gray-500" />
+                        ) : (
+                          <ChevronDown className="w-5 h-5 text-gray-500" />
+                        )}
                       </button>
+                    </div>
+                  </div>
+                </div>
+
+                {isExpanded && (
+                  <div className="p-4 border-t border-gray-200 bg-white">
+                    <div className="grid grid-cols-2 gap-6">
+                      <div>
+                        <h4 className="text-sm font-medium text-gray-700 mb-3">审核历史</h4>
+                        <div className="space-y-2">
+                          {deliverable.statusHistory.length > 0 ? (
+                            deliverable.statusHistory.map((history, idx) => (
+                              <div key={idx} className="flex items-start gap-3 p-2 bg-gray-50 rounded">
+                                <div className={`w-2 h-2 mt-1.5 rounded-full ${
+                                  history.status === 'approved' ? 'bg-green-500' :
+                                  history.status === 'rejected' ? 'bg-red-500' :
+                                  history.status === 'reviewing' ? 'bg-blue-500' : 'bg-gray-400'
+                                }`} />
+                                <div className="flex-1">
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-xs font-medium text-gray-700">
+                                      {statusConfig[history.status].label}
+                                    </span>
+                                    <span className="text-xs text-gray-400">{history.date}</span>
+                                  </div>
+                                  {history.comment && (
+                                    <p className="text-xs text-gray-600 mt-1">{history.comment}</p>
+                                  )}
+                                </div>
+                              </div>
+                            ))
+                          ) : (
+                            <p className="text-sm text-gray-400">暂无审核历史</p>
+                          )}
+                        </div>
+                      </div>
+                      
+                      <div>
+                        <h4 className="text-sm font-medium text-gray-700 mb-3">交付信息</h4>
+                        <div className="space-y-2">
+                          <div className="flex justify-between">
+                            <span className="text-sm text-gray-500">版本</span>
+                            <span className="text-sm text-gray-800">{deliverable.version}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-sm text-gray-500">当前轮次</span>
+                            <span className="text-sm text-gray-800">{currentRound}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-sm text-gray-500">最近审核</span>
+                            <span className="text-sm text-gray-800">{deliverable.lastReviewDate || '-'}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 flex justify-end gap-2">
+                      {deliverable.status === 'pending' && (
+                        <Button onClick={() => handleReviewAction(deliverable, 'submit')}>
+                          <Send className="w-4 h-4" />
+                          提交审核
+                        </Button>
+                      )}
+                      {deliverable.status === 'reviewing' && (
+                        <>
+                          <Button variant="secondary" onClick={() => handleReviewAction(deliverable, 'reject')}>
+                            <XCircle className="w-4 h-4" />
+                            退回修改
+                          </Button>
+                          <Button onClick={() => handleReviewAction(deliverable, 'approve')}>
+                            <CheckCircle className="w-4 h-4" />
+                            通过验收
+                          </Button>
+                        </>
+                      )}
+                      {deliverable.status === 'rejected' && (
+                        <Button onClick={() => handleReviewAction(deliverable, 'submit')}>
+                          <RotateCcw className="w-4 h-4" />
+                          重新提交
+                        </Button>
+                      )}
                       <button
-                        onClick={() => handleEdit(deliverable)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleEdit(deliverable);
+                        }}
                         className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
                       >
                         <Edit2 className="w-4 h-4 text-gray-500" />
                       </button>
                       <button
-                        onClick={() => handleDelete(deliverable.id)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDelete(deliverable.id);
+                        }}
                         className="p-2 hover:bg-red-50 rounded-lg transition-colors"
                       >
                         <Trash2 className="w-4 h-4 text-red-500" />
                       </button>
                     </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-
+                  </div>
+                )}
+              </div>
+            );
+          })}
+          
           {deliverables.length === 0 && (
             <div className="text-center py-12">
               <Package className="w-16 h-16 mx-auto text-gray-300 mb-4" />
@@ -622,6 +797,49 @@ export default function Delivery() {
             </Button>
             <Button type="submit">
               {editingDeliverable ? '保存修改' : '创建交付物'}
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      <Modal
+        isOpen={isReviewModalOpen}
+        onClose={() => {
+          setIsReviewModalOpen(false);
+          setEditingDeliverable(null);
+        }}
+        title={reviewAction === 'approve' ? '验收通过' : reviewAction === 'reject' ? '退回修改' : '提交审核'}
+      >
+        <form onSubmit={handleReviewSubmit} className="space-y-4">
+          {reviewAction === 'reject' && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">修改意见</label>
+              <textarea
+                value={formData.reviewComments}
+                onChange={(e) => setFormData({ ...formData, reviewComments: e.target.value })}
+                className="form-textarea"
+                rows={4}
+                placeholder="请详细说明需要修改的内容"
+                required
+              />
+            </div>
+          )}
+          {reviewAction === 'approve' && (
+            <div className="p-4 bg-green-50 rounded-lg">
+              <p className="text-green-800">确认验收通过此交付物？关联的补拍任务将自动清除。</p>
+            </div>
+          )}
+          {reviewAction === 'submit' && (
+            <div className="p-4 bg-blue-50 rounded-lg">
+              <p className="text-blue-800">提交后将进入审核流程，等待验收确认。</p>
+            </div>
+          )}
+          <div className="flex justify-end gap-3 pt-4">
+            <Button variant="secondary" onClick={() => setIsReviewModalOpen(false)}>
+              取消
+            </Button>
+            <Button type="submit">
+              确认
             </Button>
           </div>
         </form>

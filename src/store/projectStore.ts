@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { Project, Requirement, Plan, Risk, FieldReport, Deliverable, RetakeTask } from '@/types';
+import { Project, Requirement, Plan, Risk, FieldReport, Deliverable, RetakeTask, CollaborationTask } from '@/types';
 import {
   mockProjects,
   mockRequirements,
@@ -18,6 +18,7 @@ interface ProjectStore {
   fieldReports: FieldReport[];
   deliverables: Deliverable[];
   retakeTasks: RetakeTask[];
+  collaborationTasks: CollaborationTask[];
   
   addProject: (project: Omit<Project, 'id' | 'createdAt' | 'updatedAt'>) => void;
   updateProject: (id: string, updates: Partial<Project>) => void;
@@ -54,6 +55,7 @@ interface ProjectStore {
   getFieldReportsByProjectId: (projectId: string) => FieldReport[];
   getDeliverablesByProjectId: (projectId: string) => Deliverable[];
   getRetakeTasksByProjectId: (projectId: string) => RetakeTask[];
+  getAllCollaborationTasks: () => CollaborationTask[];
 }
 
 const generateId = () => Math.random().toString(36).substring(2, 9);
@@ -68,6 +70,7 @@ export const useProjectStore = create<ProjectStore>()(
       fieldReports: mockFieldReports,
       deliverables: mockDeliverables,
       retakeTasks: [],
+      collaborationTasks: [],
 
       addProject: (project: Omit<Project, 'id' | 'createdAt' | 'updatedAt'>) => {
         const now = new Date().toISOString().split('T')[0];
@@ -169,11 +172,21 @@ export const useProjectStore = create<ProjectStore>()(
       },
 
       updateDeliverable: (id: string, updates: Partial<Deliverable>) => {
-        set((state) => ({
-          deliverables: state.deliverables.map((d) =>
+        set((state) => {
+          const deliverables = state.deliverables.map((d) =>
             d.id === id ? { ...d, ...updates } : d
-          ),
-        }));
+          );
+          
+          if (updates.status === 'approved') {
+            const updatedDeliverable = deliverables.find(d => d.id === id);
+            if (updatedDeliverable) {
+              const retakeTasks = state.retakeTasks.filter(t => t.deliverableId !== id);
+              return { deliverables, retakeTasks };
+            }
+          }
+          
+          return { deliverables };
+        });
       },
 
       deleteDeliverable: (id: string) => {
@@ -215,6 +228,73 @@ export const useProjectStore = create<ProjectStore>()(
         get().deliverables.filter((d) => d.projectId === projectId),
       getRetakeTasksByProjectId: (projectId: string) =>
         get().retakeTasks.filter((t) => t.projectId === projectId),
+      getAllCollaborationTasks: () => {
+        const tasks: CollaborationTask[] = [];
+        const state = get();
+        
+        state.risks.filter(r => r.status === 'active').forEach(risk => {
+          const project = state.projects.find(p => p.id === risk.projectId);
+          tasks.push({
+            id: `risk-${risk.id}`,
+            projectId: risk.projectId,
+            type: 'risk',
+            typeId: risk.id,
+            description: `风险待处理: ${risk.description}`,
+            priority: risk.level,
+            status: 'pending',
+            createdAt: new Date().toISOString().split('T')[0],
+          });
+        });
+        
+        state.fieldReports.filter(f => f.status === 'has_issues' && !f.resolution).forEach(report => {
+          const project = state.projects.find(p => p.id === report.projectId);
+          tasks.push({
+            id: `field-${report.id}`,
+            projectId: report.projectId,
+            type: 'field_report',
+            typeId: report.id,
+            description: `外业问题待处理: ${report.date}`,
+            priority: 'high',
+            status: 'pending',
+            createdAt: new Date().toISOString().split('T')[0],
+          });
+        });
+        
+        state.retakeTasks.filter(t => t.status === 'pending').forEach(task => {
+          const project = state.projects.find(p => p.id === task.projectId);
+          const deliverable = state.deliverables.find(d => d.id === task.deliverableId);
+          tasks.push({
+            id: `retake-${task.id}`,
+            projectId: task.projectId,
+            type: 'retake',
+            typeId: task.id,
+            description: `补拍待执行: ${task.description}`,
+            priority: 'medium',
+            status: 'pending',
+            createdAt: task.createdAt,
+            dueDate: task.targetDate,
+          });
+        });
+        
+        state.deliverables.filter(d => d.status === 'reviewing').forEach(deliverable => {
+          const project = state.projects.find(p => p.id === deliverable.projectId);
+          tasks.push({
+            id: `delivery-${deliverable.id}`,
+            projectId: deliverable.projectId,
+            type: 'delivery',
+            typeId: deliverable.id,
+            description: `交付物待验收: ${deliverable.name}`,
+            priority: 'medium',
+            status: 'pending',
+            createdAt: deliverable.lastReviewDate || new Date().toISOString().split('T')[0],
+          });
+        });
+        
+        return tasks.sort((a, b) => {
+          const priorityOrder = { high: 0, medium: 1, low: 2 };
+          return priorityOrder[a.priority] - priorityOrder[b.priority];
+        });
+      },
     }),
     {
       name: 'flight-task-storage',

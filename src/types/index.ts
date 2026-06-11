@@ -74,6 +74,12 @@ export interface RetakeTask {
   completedAt?: string;
 }
 
+export interface DeliverableStatusHistory {
+  status: 'pending' | 'reviewing' | 'approved' | 'rejected';
+  date: string;
+  comment?: string;
+}
+
 export interface Deliverable {
   id: string;
   projectId: string;
@@ -82,6 +88,21 @@ export interface Deliverable {
   version: string;
   status: 'pending' | 'reviewing' | 'approved' | 'rejected';
   reviewComments: string;
+  reviewRound: number;
+  statusHistory: DeliverableStatusHistory[];
+  lastReviewDate?: string;
+}
+
+export interface CollaborationTask {
+  id: string;
+  projectId: string;
+  type: 'risk' | 'field_report' | 'retake' | 'delivery';
+  typeId: string;
+  description: string;
+  priority: 'high' | 'medium' | 'low';
+  status: 'pending' | 'processing' | 'completed';
+  createdAt: string;
+  dueDate?: string;
 }
 
 export type ProjectStatus = Project['status'];

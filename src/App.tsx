@@ -6,12 +6,14 @@ import Risk from '@/pages/Risk';
 import Field from '@/pages/Field';
 import Delivery from '@/pages/Delivery';
 import Review from '@/pages/Review';
+import Collaborations from '@/pages/Collaborations';
 
 function App() {
   return (
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<ProjectList />} />
+        <Route path="/collaborations" element={<Collaborations />} />
         <Route path="/projects/:id/requirements" element={<Requirements />} />
         <Route path="/projects/:id/planning" element={<Planning />} />
         <Route path="/projects/:id/risk" element={<Risk />} />
